@@ -134,3 +134,5 @@ This is a greenfield subscription management platform with comprehensive plannin
 - 17 specialized agents for different aspects of development
 - Structured 6-phase development approach planned
 - No code implementation has begun yet
+
+- Always update TODO.md when tasks are completed or changes to CLAUDE.md are made.
