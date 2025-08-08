@@ -247,7 +247,7 @@ Subscription management platform built with Rails 8 API backend and React TypeSc
 *Focus on Phase 6 - DevOps & Production with Password Security Enhancement*
 
 ### Immediate Next Steps
-- [🔄] Set up CI/CD pipeline with GitHub Actions
+- [🔄] Set up CI/CD pipeline
 - [ ] **Implement strong password security requirements**
   - [ ] Add comprehensive password validation to User model
   - [ ] Create password strength scoring service
@@ -310,7 +310,7 @@ Subscription management platform built with Rails 8 API backend and React TypeSc
 - 🔒 **Enhanced Password Security Implementation**
 
 **Ready for Phase 6 - DevOps & Production:**
-- CI/CD pipeline setup with GitHub Actions
+- CI/CD pipeline setup
 - **Strong password complexity requirements with comprehensive validation**
 - Production deployment configuration (Docker, cloud hosting)
 - Monitoring and performance optimization (APM, logging, alerting)
