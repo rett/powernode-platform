@@ -16,7 +16,6 @@ class CreatePaymentMethods < ActiveRecord::Migration[8.0]
 
     add_index :payment_methods, [:account_id, :is_default]
     add_index :payment_methods, [:provider, :external_id], unique: true
-    add_index :payment_methods, :user_id
 
     add_check_constraint :payment_methods,
       "provider IN ('stripe', 'paypal')",

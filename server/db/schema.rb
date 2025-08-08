@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_08_08_142015) do
+ActiveRecord::Schema[8.0].define(version: 2025_08_08_143958) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -21,9 +21,19 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_08_142015) do
     t.text "settings", default: "{}"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "stripe_customer_id"
+    t.string "paypal_customer_id"
+    t.decimal "tax_rate", precision: 5, scale: 4, default: "0.0"
+    t.datetime "suspended_at"
+    t.string "suspension_reason"
+    t.index ["paypal_customer_id"], name: "index_accounts_on_paypal_customer_id", unique: true, where: "(paypal_customer_id IS NOT NULL)"
     t.index ["status"], name: "index_accounts_on_status"
+    t.index ["stripe_customer_id"], name: "index_accounts_on_stripe_customer_id", unique: true, where: "(stripe_customer_id IS NOT NULL)"
     t.index ["subdomain"], name: "index_accounts_on_subdomain", unique: true, where: "(subdomain IS NOT NULL)"
+    t.index ["suspended_at"], name: "index_accounts_on_suspended_at"
     t.check_constraint "status::text = ANY (ARRAY['active'::character varying, 'suspended'::character varying, 'cancelled'::character varying]::text[])", name: "valid_account_status"
+    t.check_constraint "suspension_reason::text = ANY (ARRAY['non_payment'::character varying, 'policy_violation'::character varying, 'manual'::character varying, 'fraud'::character varying]::text[])", name: "valid_suspension_reason"
+    t.check_constraint "tax_rate >= 0.0 AND tax_rate <= 1.0", name: "valid_tax_rate"
   end
 
   create_table "audit_logs", id: :string, force: :cascade do |t|
@@ -102,6 +112,26 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_08_142015) do
     t.check_constraint "subtotal_cents >= 0", name: "non_negative_subtotal"
     t.check_constraint "tax_cents >= 0", name: "non_negative_tax"
     t.check_constraint "total_cents >= 0", name: "non_negative_total"
+  end
+
+  create_table "payment_methods", id: :string, force: :cascade do |t|
+    t.string "account_id", null: false
+    t.string "user_id", null: false
+    t.string "provider", null: false
+    t.string "external_id", null: false
+    t.string "payment_type", null: false
+    t.string "last_four"
+    t.datetime "expires_at"
+    t.boolean "is_default", default: false, null: false
+    t.text "metadata", default: "{}"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id", "is_default"], name: "index_payment_methods_on_account_id_and_is_default"
+    t.index ["account_id"], name: "index_payment_methods_on_account_id"
+    t.index ["provider", "external_id"], name: "index_payment_methods_on_provider_and_external_id", unique: true
+    t.index ["user_id"], name: "index_payment_methods_on_user_id"
+    t.check_constraint "payment_type::text = ANY (ARRAY['card'::character varying, 'bank'::character varying, 'paypal'::character varying, 'apple_pay'::character varying, 'google_pay'::character varying]::text[])", name: "valid_payment_method_type"
+    t.check_constraint "provider::text = ANY (ARRAY['stripe'::character varying, 'paypal'::character varying]::text[])", name: "valid_payment_method_provider"
   end
 
   create_table "payments", id: :string, force: :cascade do |t|
@@ -248,10 +278,35 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_08_142015) do
     t.check_constraint "status::text = ANY (ARRAY['active'::character varying, 'inactive'::character varying, 'suspended'::character varying]::text[])", name: "valid_user_status"
   end
 
+  create_table "webhook_events", id: :string, force: :cascade do |t|
+    t.string "provider", null: false
+    t.string "event_type", null: false
+    t.string "provider_event_id", null: false
+    t.text "event_data", null: false
+    t.string "status", default: "pending", null: false
+    t.datetime "processed_at"
+    t.integer "retry_count", default: 0, null: false
+    t.text "error_message"
+    t.text "metadata", default: "{}"
+    t.string "account_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id"], name: "index_webhook_events_on_account_id"
+    t.index ["created_at"], name: "index_webhook_events_on_created_at"
+    t.index ["provider", "event_type"], name: "index_webhook_events_on_provider_and_event_type"
+    t.index ["provider_event_id"], name: "index_webhook_events_on_provider_event_id", unique: true
+    t.index ["status"], name: "index_webhook_events_on_status"
+    t.check_constraint "provider::text = ANY (ARRAY['stripe'::character varying, 'paypal'::character varying]::text[])", name: "valid_webhook_provider"
+    t.check_constraint "retry_count >= 0 AND retry_count <= 10", name: "valid_retry_count"
+    t.check_constraint "status::text = ANY (ARRAY['pending'::character varying, 'processing'::character varying, 'processed'::character varying, 'failed'::character varying, 'skipped'::character varying]::text[])", name: "valid_webhook_status"
+  end
+
   add_foreign_key "audit_logs", "accounts"
   add_foreign_key "audit_logs", "users"
   add_foreign_key "invoice_line_items", "invoices"
   add_foreign_key "invoices", "subscriptions"
+  add_foreign_key "payment_methods", "accounts"
+  add_foreign_key "payment_methods", "users"
   add_foreign_key "payments", "invoices"
   add_foreign_key "role_permissions", "permissions"
   add_foreign_key "role_permissions", "roles"

@@ -31,7 +31,19 @@ Rails.application.routes.draw do
       resources :users
       resources :roles
       resources :permissions, only: [:index, :show]
+
+      # Payment-related endpoints
+      resources :payment_methods, except: [:show]
+      resources :subscriptions
+      resources :invoices, only: [:index, :show]
+      resources :payments, only: [:index, :show]
     end
+  end
+
+  # Webhook endpoints (outside of API versioning and auth)
+  namespace :webhooks do
+    post 'stripe', to: 'stripe#handle'
+    post 'paypal', to: 'paypal#handle'
   end
 
   # Root route for API

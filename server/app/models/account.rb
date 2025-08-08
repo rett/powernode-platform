@@ -5,6 +5,8 @@ class Account < ApplicationRecord
   has_many :invitations, dependent: :destroy
   has_many :account_delegations, dependent: :destroy
   has_many :audit_logs, dependent: :destroy
+  has_many :payment_methods, dependent: :destroy
+  has_many :webhook_events, dependent: :destroy
   
   # Subscription-related associations
   has_many :invoices, through: :subscriptions
