@@ -75,3 +75,13 @@ group :development, :test do
   # Omakase Ruby styling [https://github.com/rails/rubocop-rails-omakase/]
   gem "rubocop-rails-omakase", require: false
 end
+
+gem "database_cleaner-active_record", "~> 2.2", group: :test
+gem "shoulda-matchers", "~> 6.5", group: :test
+gem "webmock", "~> 3.25", group: :test
+gem "vcr", "~> 6.3", group: :test
+gem "rspec-json_expectations", "~> 2.2", group: :test
+
+gem "faker", "~> 3.5", group: :test
+
+gem "bundler-audit", "~> 0.9.2", group: :test

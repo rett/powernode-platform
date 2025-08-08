@@ -1,0 +1,272 @@
+require 'rails_helper'
+
+RSpec.describe 'Authentication Security', type: :request do
+  let(:account) { create(:account) }
+  let(:user) { create(:user, account: account) }
+
+  describe 'Password Security' do
+    it 'enforces minimum password length' do
+      post '/api/v1/auth/register', params: {
+        user: {
+          email: 'test@example.com',
+          password: '123',
+          first_name: 'Test',
+          last_name: 'User'
+        },
+        account: {
+          name: 'Test Company'
+        }
+      }, as: :json
+
+      expect(response).to have_http_status(422)
+      expect(json_response['error']).to include('Password is too short')
+    end
+
+    it 'hashes passwords securely' do
+      user = create(:user, password: 'plaintext_password')
+      expect(user.password_digest).not_to eq('plaintext_password')
+      expect(user.password_digest).to start_with('$2a$')  # bcrypt hash
+    end
+
+    it 'does not expose password digest in API responses' do
+      headers = auth_headers_for(user)
+      get '/api/v1/auth/me', headers: headers
+
+      expect(response).to have_http_status(200)
+      expect(json_response['user']).not_to have_key('password_digest')
+      expect(json_response['user']).not_to have_key('password')
+    end
+  end
+
+  describe 'JWT Token Security' do
+    it 'generates secure JWT tokens' do
+      post '/api/v1/auth/login', params: {
+        email: user.email,
+        password: 'password123'
+      }, as: :json
+
+      expect(response).to have_http_status(200)
+      token = json_response['access_token']
+      
+      # JWT should have three parts separated by dots
+      expect(token.split('.').length).to eq(3)
+      
+      # Decode token to check structure
+      payload = JWT.decode(token, Rails.application.credentials.secret_key_base)[0]
+      expect(payload).to include('user_id', 'account_id', 'exp')
+    end
+
+    it 'validates JWT signature' do
+      # Create a token with wrong signature
+      payload = {
+        user_id: user.id,
+        account_id: user.account.id,
+        exp: 1.hour.from_now.to_i
+      }
+      invalid_token = JWT.encode(payload, 'wrong_secret')
+
+      get '/api/v1/auth/me', headers: {
+        'Authorization' => "Bearer #{invalid_token}"
+      }
+
+      expect(response).to have_http_status(401)
+      expect(json_response['error']).to include('Invalid')
+    end
+
+    it 'rejects expired tokens' do
+      payload = {
+        user_id: user.id,
+        account_id: user.account.id,
+        exp: 1.hour.ago.to_i
+      }
+      expired_token = JWT.encode(payload, Rails.application.credentials.secret_key_base)
+
+      get '/api/v1/auth/me', headers: {
+        'Authorization' => "Bearer #{expired_token}"
+      }
+
+      expect(response).to have_http_status(401)
+      expect(json_response['error']).to include('expired')
+    end
+  end
+
+  describe 'Rate Limiting' do
+    before do
+      # Enable rate limiting for tests
+      allow(Rails.application.config).to receive(:rate_limiting_enabled).and_return(true)
+    end
+
+    it 'limits login attempts per IP address' do
+      # Make multiple failed login attempts
+      5.times do
+        post '/api/v1/auth/login', params: {
+          email: user.email,
+          password: 'wrong_password'
+        }, as: :json
+        
+        expect(response).to have_http_status(401)
+      end
+
+      # 6th attempt should be rate limited
+      post '/api/v1/auth/login', params: {
+        email: user.email,
+        password: 'wrong_password'
+      }, as: :json
+
+      expect(response).to have_http_status(429)
+      expect(json_response['error']).to include('rate limit')
+    end
+  end
+
+  describe 'Session Security' do
+    it 'does not expose sensitive data in session' do
+      post '/api/v1/auth/login', params: {
+        email: user.email,
+        password: 'password123'
+      }, as: :json
+
+      expect(response).to have_http_status(200)
+      
+      # Check that sensitive data is not in the response
+      expect(json_response).not_to have_key('password_digest')
+      expect(json_response).not_to have_key('password')
+      expect(json_response['user']).not_to have_key('password_digest')
+    end
+
+    it 'invalidates refresh tokens on logout' do
+      # Login to get tokens
+      post '/api/v1/auth/login', params: {
+        email: user.email,
+        password: 'password123'
+      }, as: :json
+
+      refresh_token = json_response['refresh_token']
+      headers = auth_headers_for(user)
+
+      # Logout
+      post '/api/v1/auth/logout', headers: headers
+
+      expect(response).to have_http_status(200)
+
+      # Try to use refresh token after logout
+      post '/api/v1/auth/refresh', params: {
+        refresh_token: refresh_token
+      }, as: :json
+
+      expect(response).to have_http_status(401)
+    end
+  end
+
+  describe 'Authorization Security' do
+    let(:admin_user) { create(:user, :admin, account: account) }
+    let(:member_user) { create(:user, :member, account: account) }
+    let(:other_account) { create(:account) }
+    let(:other_user) { create(:user, account: other_account) }
+
+    it 'enforces account isolation' do
+      headers = auth_headers_for(other_user)
+
+      # Try to access user from different account
+      get "/api/v1/users/#{user.id}", headers: headers
+
+      expect(response).to have_http_status(403)
+    end
+
+    it 'enforces role-based permissions' do
+      headers = auth_headers_for(member_user)
+
+      # Try to access admin endpoint as member
+      get '/api/v1/admin/users', headers: headers
+
+      expect(response).to have_http_status(403)
+    end
+
+    it 'validates permission scopes' do
+      headers = auth_headers_for(member_user)
+
+      # Try to delete user as member (should not have permission)
+      delete "/api/v1/users/#{user.id}", headers: headers
+
+      expect(response).to have_http_status(403)
+    end
+  end
+
+  describe 'Input Validation Security' do
+    it 'prevents SQL injection in login' do
+      post '/api/v1/auth/login', params: {
+        email: "test@example.com'; DROP TABLE users; --",
+        password: 'password'
+      }, as: :json
+
+      expect(response).to have_http_status(401)
+      # User table should still exist
+      expect { User.count }.not_to raise_error
+    end
+
+    it 'sanitizes email input' do
+      post '/api/v1/auth/register', params: {
+        user: {
+          email: '<script>alert("xss")</script>@example.com',
+          password: 'password123',
+          first_name: 'Test',
+          last_name: 'User'
+        },
+        account: {
+          name: 'Test Company'
+        }
+      }, as: :json
+
+      if response.status == 201
+        user = User.find_by(first_name: 'Test')
+        expect(user.email).not_to include('<script>')
+      end
+    end
+
+    it 'validates email format strictly' do
+      post '/api/v1/auth/register', params: {
+        user: {
+          email: 'not_an_email',
+          password: 'password123',
+          first_name: 'Test',
+          last_name: 'User'
+        },
+        account: {
+          name: 'Test Company'
+        }
+      }, as: :json
+
+      expect(response).to have_http_status(422)
+      expect(json_response['error']).to include('Email is invalid')
+    end
+  end
+
+  describe 'HTTPS and Security Headers' do
+    it 'enforces secure headers in production', :skip_in_development do
+      get '/', headers: { 'HTTP_X_FORWARDED_PROTO' => 'https' }
+
+      expect(response.headers).to include(
+        'X-Frame-Options' => 'DENY',
+        'X-Content-Type-Options' => 'nosniff',
+        'X-XSS-Protection' => '1; mode=block',
+        'Strict-Transport-Security'
+      )
+    end
+
+    it 'sets secure cookie flags in production' do
+      allow(Rails.env).to receive(:production?).and_return(true)
+
+      post '/api/v1/auth/login', params: {
+        email: user.email,
+        password: 'password123'
+      }, as: :json
+
+      # Check Set-Cookie header for secure flags if cookies are used
+      set_cookie = response.headers['Set-Cookie']
+      if set_cookie
+        expect(set_cookie).to include('Secure')
+        expect(set_cookie).to include('HttpOnly')
+        expect(set_cookie).to include('SameSite=Strict')
+      end
+    end
+  end
+end
