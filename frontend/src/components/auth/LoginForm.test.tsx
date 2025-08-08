@@ -56,6 +56,10 @@ describe('LoginPage', () => {
         access_token: 'mock-access-token',
         refresh_token: 'mock-refresh-token',
       },
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config: {} as any,
     };
 
     mockedAuthAPI.login.mockResolvedValueOnce(mockResponse);
@@ -133,7 +137,7 @@ describe('LoginPage', () => {
       resolvePromise = resolve;
     });
 
-    mockedAuthAPI.login.mockReturnValueOnce(pendingPromise);
+    mockedAuthAPI.login.mockReturnValueOnce(pendingPromise as Promise<any>);
 
     renderWithProviders(<LoginPage />, {
       preloadedState: mockUnauthenticatedState,

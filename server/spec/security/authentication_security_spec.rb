@@ -6,7 +6,7 @@ RSpec.describe 'Authentication Security', type: :request do
 
   describe 'Password Security' do
     it 'enforces minimum password length' do
-      post '/api/v1/auth/register', params: {
+      post '/api/v1/registrations', params: {
         user: {
           email: 'test@example.com',
           password: '123',
@@ -19,7 +19,57 @@ RSpec.describe 'Authentication Security', type: :request do
       }, as: :json
 
       expect(response).to have_http_status(422)
-      expect(json_response['error']).to include('Password is too short')
+      expect(json_response['error']).to include('Password must be at least 12 characters long')
+    end
+
+    it 'enforces password complexity requirements' do
+      post '/api/v1/registrations', params: {
+        user: {
+          email: 'test@example.com',
+          password: 'simplepAssword',
+          first_name: 'Test',
+          last_name: 'User'
+        },
+        account: {
+          name: 'Test Company'
+        }
+      }, as: :json
+
+      expect(response).to have_http_status(422)
+      expect(json_response['error']).to include('Password must contain')
+    end
+
+    it 'accepts strong passwords' do
+      post '/api/v1/registrations', params: {
+        user: {
+          email: 'test@example.com',
+          password: 'StrongPassword123!',
+          first_name: 'Test',
+          last_name: 'User'
+        },
+        account: {
+          name: 'Test Company'
+        }
+      }, as: :json
+
+      expect(response).to have_http_status(201)
+    end
+
+    it 'rejects common passwords' do
+      post '/api/v1/registrations', params: {
+        user: {
+          email: 'test@example.com',
+          password: 'SecureFactoryCode$9!',
+          first_name: 'Test',
+          last_name: 'User'
+        },
+        account: {
+          name: 'Test Company'
+        }
+      }, as: :json
+
+      expect(response).to have_http_status(422)
+      expect(json_response['error']).to include('too common')
     end
 
     it 'hashes passwords securely' do
@@ -30,7 +80,7 @@ RSpec.describe 'Authentication Security', type: :request do
 
     it 'does not expose password digest in API responses' do
       headers = auth_headers_for(user)
-      get '/api/v1/auth/me', headers: headers
+      get '/api/v1/sessions/current', headers: headers
 
       expect(response).to have_http_status(200)
       expect(json_response['user']).not_to have_key('password_digest')
@@ -40,9 +90,9 @@ RSpec.describe 'Authentication Security', type: :request do
 
   describe 'JWT Token Security' do
     it 'generates secure JWT tokens' do
-      post '/api/v1/auth/login', params: {
+      post '/api/v1/sessions', params: {
         email: user.email,
-        password: 'password123'
+        password: 'SecureFactoryCode$9!'
       }, as: :json
 
       expect(response).to have_http_status(200)
@@ -65,7 +115,7 @@ RSpec.describe 'Authentication Security', type: :request do
       }
       invalid_token = JWT.encode(payload, 'wrong_secret')
 
-      get '/api/v1/auth/me', headers: {
+      get '/api/v1/sessions/current', headers: {
         'Authorization' => "Bearer #{invalid_token}"
       }
 
@@ -81,12 +131,55 @@ RSpec.describe 'Authentication Security', type: :request do
       }
       expired_token = JWT.encode(payload, Rails.application.credentials.secret_key_base)
 
-      get '/api/v1/auth/me', headers: {
+      get '/api/v1/sessions/current', headers: {
         'Authorization' => "Bearer #{expired_token}"
       }
 
       expect(response).to have_http_status(401)
       expect(json_response['error']).to include('expired')
+    end
+  end
+
+  describe 'Account Lockout Security' do
+    it 'locks account after failed login attempts' do
+      # Make multiple failed login attempts
+      User::MAX_FAILED_ATTEMPTS.times do
+        post '/api/v1/sessions', params: {
+          email: user.email,
+          password: 'wrong_password'
+        }, as: :json
+        
+        expect(response).to have_http_status(401)
+      end
+
+      user.reload
+      expect(user.locked?).to be true
+      expect(user.failed_login_attempts).to eq(User::MAX_FAILED_ATTEMPTS)
+    end
+
+    it 'prevents login when account is locked' do
+      user.update!(locked_until: 1.hour.from_now)
+
+      post '/api/v1/sessions', params: {
+        email: user.email,
+        password: 'SecureFactoryCode$9!'
+      }, as: :json
+
+      expect(response).to have_http_status(401)
+      expect(json_response['error']).to include('account is temporarily locked')
+    end
+
+    it 'resets failed attempts on successful login' do
+      user.update!(failed_login_attempts: 3)
+
+      post '/api/v1/sessions', params: {
+        email: user.email,
+        password: 'SecureFactoryCode$9!'
+      }, as: :json
+
+      expect(response).to have_http_status(200)
+      user.reload
+      expect(user.failed_login_attempts).to eq(0)
     end
   end
 
@@ -99,7 +192,7 @@ RSpec.describe 'Authentication Security', type: :request do
     it 'limits login attempts per IP address' do
       # Make multiple failed login attempts
       5.times do
-        post '/api/v1/auth/login', params: {
+        post '/api/v1/sessions', params: {
           email: user.email,
           password: 'wrong_password'
         }, as: :json
@@ -108,7 +201,7 @@ RSpec.describe 'Authentication Security', type: :request do
       end
 
       # 6th attempt should be rate limited
-      post '/api/v1/auth/login', params: {
+      post '/api/v1/sessions', params: {
         email: user.email,
         password: 'wrong_password'
       }, as: :json
@@ -120,9 +213,9 @@ RSpec.describe 'Authentication Security', type: :request do
 
   describe 'Session Security' do
     it 'does not expose sensitive data in session' do
-      post '/api/v1/auth/login', params: {
+      post '/api/v1/sessions', params: {
         email: user.email,
-        password: 'password123'
+        password: 'SecureFactoryCode$9!'
       }, as: :json
 
       expect(response).to have_http_status(200)
@@ -135,21 +228,21 @@ RSpec.describe 'Authentication Security', type: :request do
 
     it 'invalidates refresh tokens on logout' do
       # Login to get tokens
-      post '/api/v1/auth/login', params: {
+      post '/api/v1/sessions', params: {
         email: user.email,
-        password: 'password123'
+        password: 'SecureFactoryCode$9!'
       }, as: :json
 
       refresh_token = json_response['refresh_token']
       headers = auth_headers_for(user)
 
       # Logout
-      post '/api/v1/auth/logout', headers: headers
+      post '/api/v1/sessions', headers: headers
 
       expect(response).to have_http_status(200)
 
       # Try to use refresh token after logout
-      post '/api/v1/auth/refresh', params: {
+      post '/api/v1/sessions/refresh', params: {
         refresh_token: refresh_token
       }, as: :json
 
@@ -193,7 +286,7 @@ RSpec.describe 'Authentication Security', type: :request do
 
   describe 'Input Validation Security' do
     it 'prevents SQL injection in login' do
-      post '/api/v1/auth/login', params: {
+      post '/api/v1/sessions', params: {
         email: "test@example.com'; DROP TABLE users; --",
         password: 'password'
       }, as: :json
@@ -204,10 +297,10 @@ RSpec.describe 'Authentication Security', type: :request do
     end
 
     it 'sanitizes email input' do
-      post '/api/v1/auth/register', params: {
+      post '/api/v1/registrations', params: {
         user: {
           email: '<script>alert("xss")</script>@example.com',
-          password: 'password123',
+          password: 'SecureFactoryCode$9!',
           first_name: 'Test',
           last_name: 'User'
         },
@@ -223,10 +316,10 @@ RSpec.describe 'Authentication Security', type: :request do
     end
 
     it 'validates email format strictly' do
-      post '/api/v1/auth/register', params: {
+      post '/api/v1/registrations', params: {
         user: {
           email: 'not_an_email',
-          password: 'password123',
+          password: 'SecureFactoryCode$9!',
           first_name: 'Test',
           last_name: 'User'
         },
@@ -247,17 +340,17 @@ RSpec.describe 'Authentication Security', type: :request do
       expect(response.headers).to include(
         'X-Frame-Options' => 'DENY',
         'X-Content-Type-Options' => 'nosniff',
-        'X-XSS-Protection' => '1; mode=block',
-        'Strict-Transport-Security'
+        'X-XSS-Protection' => '1; mode=block'
       )
+      expect(response.headers).to have_key('Strict-Transport-Security')
     end
 
     it 'sets secure cookie flags in production' do
       allow(Rails.env).to receive(:production?).and_return(true)
 
-      post '/api/v1/auth/login', params: {
+      post '/api/v1/sessions', params: {
         email: user.email,
-        password: 'password123'
+        password: 'SecureFactoryCode$9!'
       }, as: :json
 
       # Check Set-Cookie header for secure flags if cookies are used

@@ -17,6 +17,7 @@ export const ResetPasswordPage: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // eslint-disable-next-line security/detect-possible-timing-attacks
     if (password !== confirmPassword) {
       dispatch(addNotification({
         type: 'error',

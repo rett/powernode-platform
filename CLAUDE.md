@@ -88,6 +88,13 @@ The project uses a sophisticated agent-based development approach defined in `cl
 
 ### Security Considerations
 - JWT authentication for API access
+- **Password Security**: Strong password complexity requirements enforced
+  - Minimum 12 characters length
+  - Must contain uppercase, lowercase, numbers, and special characters
+  - Password strength validation with entropy scoring
+  - Password history tracking to prevent reuse of last 12 passwords
+  - Account lockout after 5 failed attempts with exponential backoff
+  - Secure password reset with time-limited tokens
 - Rate limiting on all endpoints
 - PCI DSS compliance for payment data
 - Proper input validation and sanitization
@@ -103,6 +110,12 @@ The project uses a sophisticated agent-based development approach defined in `cl
 
 ### Testing Strategy
 - Comprehensive model tests with FactoryBot
+- **Password Security Testing**: Comprehensive test coverage for password requirements
+  - Password complexity validation tests
+  - Password strength scoring tests
+  - Account lockout behavior tests
+  - Password history and reuse prevention tests
+  - Password reset security flow tests
 - API endpoint testing with proper fixtures
 - Payment processing tests using VCR or stubs
 - Frontend component testing with Testing Library

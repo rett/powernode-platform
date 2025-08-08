@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_08_08_144824) do
+ActiveRecord::Schema[8.0].define(version: 2025_08_08_152656) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -112,6 +112,14 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_08_144824) do
     t.check_constraint "subtotal_cents >= 0", name: "non_negative_subtotal"
     t.check_constraint "tax_cents >= 0", name: "non_negative_tax"
     t.check_constraint "total_cents >= 0", name: "non_negative_total"
+  end
+
+  create_table "password_histories", id: :string, force: :cascade do |t|
+    t.string "user_id", null: false
+    t.string "password_digest", null: false
+    t.datetime "created_at", null: false
+    t.index ["user_id", "created_at"], name: "index_password_histories_on_user_and_created_at"
+    t.index ["user_id"], name: "index_password_histories_on_user_id"
   end
 
   create_table "payment_methods", id: :string, force: :cascade do |t|
@@ -302,10 +310,15 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_08_144824) do
     t.datetime "email_verified_at"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "failed_login_attempts", default: 0, null: false
+    t.datetime "locked_until"
+    t.datetime "password_changed_at"
     t.index ["account_id", "email"], name: "index_users_on_account_id_and_email", unique: true
     t.index ["account_id", "role"], name: "index_users_on_account_id_and_role"
     t.index ["account_id"], name: "index_users_on_account_id"
     t.index ["email"], name: "index_users_on_email", unique: true
+    t.index ["locked_until"], name: "index_users_on_locked_until"
+    t.index ["password_changed_at"], name: "index_users_on_password_changed_at"
     t.index ["status"], name: "index_users_on_status"
     t.check_constraint "role::text = ANY (ARRAY['owner'::character varying, 'admin'::character varying, 'member'::character varying]::text[])", name: "valid_user_role"
     t.check_constraint "status::text = ANY (ARRAY['active'::character varying, 'inactive'::character varying, 'suspended'::character varying]::text[])", name: "valid_user_status"
@@ -338,6 +351,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_08_144824) do
   add_foreign_key "audit_logs", "users"
   add_foreign_key "invoice_line_items", "invoices"
   add_foreign_key "invoices", "subscriptions"
+  add_foreign_key "password_histories", "users"
   add_foreign_key "payment_methods", "accounts"
   add_foreign_key "payment_methods", "users"
   add_foreign_key "payments", "invoices"

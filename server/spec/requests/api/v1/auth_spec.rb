@@ -40,10 +40,10 @@ RSpec.describe 'Api::V1::Auth', type: :request do
             'first_name' => 'John',
             'last_name' => 'Doe',
             'role' => 'owner'
-          ),
-          'access_token',
-          'refresh_token'
+          )
         )
+        expect(response_data).to have_key('access_token')
+        expect(response_data).to have_key('refresh_token')
       end
 
       it 'assigns owner role to first user' do
@@ -100,10 +100,10 @@ RSpec.describe 'Api::V1::Auth', type: :request do
           'user' => hash_including(
             'id' => user.id,
             'email' => user.email
-          ),
-          'access_token',
-          'refresh_token'
+          )
         )
+        expect(response_data).to have_key('access_token')
+        expect(response_data).to have_key('refresh_token')
       end
 
       it 'updates last_login_at' do
@@ -195,10 +195,8 @@ RSpec.describe 'Api::V1::Auth', type: :request do
         expect_success_response
         response_data = json_response
         
-        expect(response_data).to include(
-          'access_token',
-          'refresh_token'
-        )
+        expect(response_data).to have_key('access_token')
+        expect(response_data).to have_key('refresh_token')
         
         # Tokens should be different from the original
         expect(response_data['access_token']).not_to eq(refresh_token)

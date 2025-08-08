@@ -4,7 +4,7 @@ FactoryBot.define do
     sequence(:email) { |n| "user#{n}@example.com" }
     first_name { Faker::Name.first_name }
     last_name { Faker::Name.last_name }
-    password { 'password123' }
+    password { 'SecureFactoryCode$9!' }
     role { 'member' }
     status { 'active' }
     email_verified_at { 1.day.ago }

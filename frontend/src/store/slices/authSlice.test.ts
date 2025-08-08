@@ -9,6 +9,8 @@ import authReducer, {
   refreshAccessToken,
 } from './authSlice';
 import { authAPI } from '../../services/authAPI';
+import { RootState, AppDispatch } from '../index';
+import uiReducer from './uiSlice';
 
 // Mock the auth API
 jest.mock('../../services/authAPI');
@@ -24,12 +26,13 @@ const localStorageMock = {
 (global as any).localStorage = localStorageMock;
 
 describe('authSlice', () => {
-  let store: ReturnType<typeof configureStore>;
+  let store: ReturnType<typeof configureStore<RootState>>;
 
   beforeEach(() => {
     store = configureStore({
       reducer: {
         auth: authReducer,
+        ui: uiReducer,
       },
     });
     jest.clearAllMocks();
@@ -60,6 +63,7 @@ describe('authSlice', () => {
       const storeWithTokens = configureStore({
         reducer: {
           auth: authReducer,
+          ui: uiReducer,
         },
       });
 
@@ -129,6 +133,10 @@ describe('authSlice', () => {
         access_token: 'mock-access-token',
         refresh_token: 'mock-refresh-token',
       },
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config: {} as any,
     };
 
     it('should handle successful login', async () => {
@@ -169,7 +177,7 @@ describe('authSlice', () => {
         resolvePromise = resolve;
       });
       
-      mockedAuthAPI.login.mockReturnValueOnce(pendingPromise);
+      mockedAuthAPI.login.mockReturnValueOnce(pendingPromise as Promise<any>);
 
       const loginPromise = store.dispatch(login({
         email: 'test@example.com',
@@ -208,6 +216,10 @@ describe('authSlice', () => {
         access_token: 'new-access-token',
         refresh_token: 'new-refresh-token',
       },
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      config: {} as any,
     };
 
     it('should handle successful registration', async () => {
@@ -264,7 +276,13 @@ describe('authSlice', () => {
         },
       });
 
-      mockedAuthAPI.logout.mockResolvedValueOnce({ data: {} });
+      mockedAuthAPI.logout.mockResolvedValueOnce({
+        data: {},
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config: {} as any,
+      });
 
       await store.dispatch(logout());
 
@@ -298,6 +316,10 @@ describe('authSlice', () => {
             },
           },
         },
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config: {} as any,
       };
 
       mockedAuthAPI.getCurrentUser.mockResolvedValueOnce(mockUserResponse);
@@ -327,6 +349,10 @@ describe('authSlice', () => {
           access_token: 'new-access-token',
           refresh_token: 'new-refresh-token',
         },
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config: {} as any,
       };
 
       mockedAuthAPI.refreshToken.mockResolvedValueOnce(mockRefreshResponse);

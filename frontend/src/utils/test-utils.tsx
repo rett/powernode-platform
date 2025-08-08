@@ -2,15 +2,15 @@ import React, { ReactElement } from 'react';
 import { render, RenderOptions } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { BrowserRouter } from 'react-router-dom';
-import { configureStore, PreloadedState } from '@reduxjs/toolkit';
-import authSlice from '../store/slices/authSlice';
-import uiSlice from '../store/slices/uiSlice';
+import { configureStore } from '@reduxjs/toolkit';
+import authReducer from '../store/slices/authSlice';
+import uiReducer from '../store/slices/uiSlice';
 import { RootState } from '../store';
 
 // This type interface extends the default options for render from RTL, as well
 // as allows the user to specify other things such as initialState, store.
 interface ExtendedRenderOptions extends Omit<RenderOptions, 'wrapper'> {
-  preloadedState?: PreloadedState<RootState>;
+  preloadedState?: any;
   store?: any;
   route?: string;
 }
@@ -22,10 +22,10 @@ export function renderWithProviders(
     // Automatically create a store instance if no store was passed in
     store = configureStore({
       reducer: {
-        auth: authSlice,
-        ui: uiSlice,
+        auth: authReducer,
+        ui: uiReducer,
       },
-      preloadedState,
+      ...(preloadedState && { preloadedState }),
     }),
     route = '/',
     ...renderOptions
@@ -34,7 +34,7 @@ export function renderWithProviders(
   // Set the initial route
   window.history.pushState({}, 'Test page', route);
 
-  function Wrapper({ children }: { children?: React.ReactNode }): JSX.Element {
+  function Wrapper({ children }: { children?: React.ReactNode }): React.ReactElement {
     return (
       <Provider store={store}>
         <BrowserRouter>{children}</BrowserRouter>

@@ -7,10 +7,18 @@ class Api::V1::SessionsController < ApplicationController
   def create
     user = User.find_by(email: login_params[:email]&.downcase)
     
+    # Check if account is locked before attempting authentication
+    if user&.locked?
+      render json: { 
+        error: 'Your account is temporarily locked due to multiple failed login attempts. Please try again later.' 
+      }, status: :unauthorized
+      return
+    end
+    
     if user&.authenticate(login_params[:password])
       if user.active? && user.account.active?
         tokens = JwtService.generate_tokens(user)
-        user.record_login!
+        # record_login! is now called in authenticate method
         
         render json: {
           user: user_data(user),
@@ -23,9 +31,18 @@ class Api::V1::SessionsController < ApplicationController
         }, status: :forbidden
       end
     else
-      render json: { 
-        error: 'Invalid email or password' 
-      }, status: :unauthorized
+      # Authentication failed, failed login attempt is already recorded in User#authenticate
+      user.reload if user # Reload to get updated failed_login_attempts
+      
+      if user&.locked?
+        render json: { 
+          error: 'Your account has been temporarily locked due to multiple failed login attempts. Please try again later.' 
+        }, status: :unauthorized
+      else
+        render json: { 
+          error: 'Invalid email or password' 
+        }, status: :unauthorized
+      end
     end
   end
 
@@ -59,7 +76,12 @@ class Api::V1::SessionsController < ApplicationController
   private
 
   def login_params
-    params.require(:session).permit(:email, :password)
+    # Handle both nested session params and direct params for backward compatibility
+    if params[:session].present?
+      params.require(:session).permit(:email, :password)
+    else
+      params.permit(:email, :password)
+    end
   end
 
   def user_data(user)
