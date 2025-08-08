@@ -86,6 +86,20 @@ class User < ApplicationRecord
     Permission.joins(:roles).where(roles: { id: role_ids })
   end
 
+  # Analytics permission helper methods
+  def can?(permission_action)
+    case permission_action.to_s
+    when 'view_analytics'
+      has_permission?('analytics_read') || owner? || admin?
+    when 'export_analytics'
+      has_permission?('analytics_export') || owner? || admin?
+    when 'view_global_analytics'
+      has_permission?('analytics_global') || owner?
+    else
+      false
+    end
+  end
+
   private
 
   def normalize_email

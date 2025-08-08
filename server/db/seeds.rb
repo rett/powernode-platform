@@ -34,7 +34,9 @@ permissions_data = [
   { resource: 'billing', action: 'update', description: 'Update billing settings' },
   
   # Analytics access
-  { resource: 'analytics', action: 'read', description: 'View analytics and reports' }
+  { resource: 'analytics', action: 'read', description: 'View analytics and reports' },
+  { resource: 'analytics', action: 'export', description: 'Export analytics data' },
+  { resource: 'analytics', action: 'global', description: 'View global analytics across all accounts' }
 ]
 
 permissions_data.each do |perm_data|

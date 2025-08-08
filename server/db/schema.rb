@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2025_08_08_143958) do
+ActiveRecord::Schema[8.0].define(version: 2025_08_08_144824) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -200,6 +200,39 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_08_143958) do
     t.check_constraint "status::text = ANY (ARRAY['active'::character varying, 'inactive'::character varying, 'archived'::character varying]::text[])", name: "valid_plan_status"
   end
 
+  create_table "revenue_snapshots", id: :string, force: :cascade do |t|
+    t.string "account_id"
+    t.date "date", null: false
+    t.string "period_type", default: "daily", null: false
+    t.integer "mrr_cents", default: 0, null: false
+    t.integer "arr_cents", default: 0, null: false
+    t.integer "active_subscriptions_count", default: 0, null: false
+    t.integer "new_subscriptions_count", default: 0, null: false
+    t.integer "churned_subscriptions_count", default: 0, null: false
+    t.integer "total_customers_count", default: 0, null: false
+    t.integer "new_customers_count", default: 0, null: false
+    t.integer "churned_customers_count", default: 0, null: false
+    t.decimal "customer_churn_rate", precision: 5, scale: 4, default: "0.0"
+    t.decimal "revenue_churn_rate", precision: 5, scale: 4, default: "0.0"
+    t.decimal "growth_rate", precision: 6, scale: 4, default: "0.0"
+    t.integer "arpu_cents", default: 0, null: false
+    t.integer "ltv_cents", default: 0, null: false
+    t.text "metadata", default: "{}"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["account_id", "date", "period_type"], name: "unique_revenue_snapshot_per_account_date_period", unique: true
+    t.index ["account_id"], name: "index_revenue_snapshots_on_account_id"
+    t.index ["created_at"], name: "index_revenue_snapshots_on_created_at"
+    t.index ["date", "period_type"], name: "index_revenue_snapshots_on_date_period"
+    t.index ["date"], name: "index_revenue_snapshots_on_date"
+    t.index ["period_type"], name: "index_revenue_snapshots_on_period_type"
+    t.check_constraint "arr_cents >= 0", name: "non_negative_arr"
+    t.check_constraint "customer_churn_rate >= 0.0 AND customer_churn_rate <= 1.0", name: "valid_customer_churn_rate"
+    t.check_constraint "mrr_cents >= 0", name: "non_negative_mrr"
+    t.check_constraint "period_type::text = ANY (ARRAY['daily'::character varying, 'weekly'::character varying, 'monthly'::character varying, 'quarterly'::character varying, 'yearly'::character varying]::text[])", name: "valid_period_type"
+    t.check_constraint "revenue_churn_rate >= 0.0 AND revenue_churn_rate <= 1.0", name: "valid_revenue_churn_rate"
+  end
+
   create_table "role_permissions", id: :string, force: :cascade do |t|
     t.string "role_id", null: false
     t.string "permission_id", null: false
@@ -308,6 +341,7 @@ ActiveRecord::Schema[8.0].define(version: 2025_08_08_143958) do
   add_foreign_key "payment_methods", "accounts"
   add_foreign_key "payment_methods", "users"
   add_foreign_key "payments", "invoices"
+  add_foreign_key "revenue_snapshots", "accounts"
   add_foreign_key "role_permissions", "permissions"
   add_foreign_key "role_permissions", "roles"
   add_foreign_key "subscriptions", "accounts"

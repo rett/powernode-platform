@@ -37,6 +37,16 @@ Rails.application.routes.draw do
       resources :subscriptions
       resources :invoices, only: [:index, :show]
       resources :payments, only: [:index, :show]
+
+      # Analytics endpoints
+      namespace :analytics do
+        get :revenue
+        get :growth
+        get :churn
+        get :cohorts
+        get :customers
+        match :export, via: [:get, :post]
+      end
     end
   end
 
