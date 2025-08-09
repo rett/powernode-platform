@@ -1,0 +1,95 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: powernode_postgres
+    environment:
+      POSTGRES_DB: powernode_development
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - powernode_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: powernode_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - powernode_network
+
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: powernode_backend
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/powernode_development
+      REDIS_URL: redis://redis:6379/0
+      RAILS_ENV: development
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./server:/app
+      - backend_bundle:/usr/local/bundle
+    networks:
+      - powernode_network
+    command: ["bundle", "exec", "rails", "server", "-b", "0.0.0.0", "-p", "3000"]
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: powernode_frontend
+    environment:
+      REACT_APP_API_BASE_URL: http://localhost:3000
+      PORT: 3001
+    ports:
+      - "3001:3001"
+    depends_on:
+      - backend
+    volumes:
+      - ./frontend:/app
+      - frontend_modules:/app/node_modules
+    networks:
+      - powernode_network
+    command: ["npm", "start"]
+
+  sidekiq:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: powernode_sidekiq
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/powernode_development
+      REDIS_URL: redis://redis:6379/0
+      RAILS_ENV: development
+    depends_on:
+      - postgres
+      - redis
+      - backend
+    volumes:
+      - ./server:/app
+      - backend_bundle:/usr/local/bundle
+    networks:
+      - powernode_network
+    command: ["bundle", "exec", "sidekiq"]
+
+volumes:
+  postgres_data:
+  redis_data:
+  backend_bundle:
+  frontend_modules:
+
+networks:
+  powernode_network:
+    driver: bridge

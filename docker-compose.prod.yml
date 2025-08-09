@@ -1,0 +1,106 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: powernode_postgres_prod
+    environment:
+      POSTGRES_DB: powernode_production
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+    networks:
+      - powernode_network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: powernode_redis_prod
+    volumes:
+      - redis_prod_data:/data
+    networks:
+      - powernode_network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+  backend:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: powernode_backend_prod
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/powernode_production
+      REDIS_URL: redis://redis:6379/0
+      RAILS_ENV: production
+      RAILS_MASTER_KEY: ${RAILS_MASTER_KEY}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY}
+      PAYPAL_CLIENT_ID: ${PAYPAL_CLIENT_ID}
+      PAYPAL_CLIENT_SECRET: ${PAYPAL_CLIENT_SECRET}
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - powernode_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: powernode_frontend_prod
+    depends_on:
+      - backend
+    networks:
+      - powernode_network
+    restart: unless-stopped
+
+  sidekiq:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: powernode_sidekiq_prod
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/powernode_production
+      REDIS_URL: redis://redis:6379/0
+      RAILS_ENV: production
+      RAILS_MASTER_KEY: ${RAILS_MASTER_KEY}
+      SECRET_KEY_BASE: ${SECRET_KEY_BASE}
+    depends_on:
+      - postgres
+      - redis
+      - backend
+    networks:
+      - powernode_network
+    restart: unless-stopped
+    command: ["bundle", "exec", "sidekiq"]
+
+  nginx:
+    image: nginx:alpine
+    container_name: powernode_nginx_prod
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/ssl/certs
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - powernode_network
+    restart: unless-stopped
+
+volumes:
+  postgres_prod_data:
+  redis_prod_data:
+
+networks:
+  powernode_network:
+    driver: bridge
