@@ -1,0 +1,91 @@
+name: 'Deploy to Docker Swarm'
+description: 'Deploy Powernode Platform to Docker Swarm cluster'
+inputs:
+  environment:
+    description: 'Deployment environment (staging/production)'
+    required: true
+  docker-host:
+    description: 'Docker host connection string'
+    required: true
+  stack-name:
+    description: 'Docker stack name'
+    required: true
+  registry-url:
+    description: 'Container registry URL'
+    required: true
+  version:
+    description: 'Image version tag'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Docker context
+      shell: bash
+      run: |
+        echo "${{ inputs.docker-host }}" | base64 -d > docker-host.pem
+        chmod 600 docker-host.pem
+        
+        # Create Docker context for remote swarm
+        docker context create swarm-${{ inputs.environment }} \
+          --docker "host=ssh://deploy@${{ inputs.docker-host }},key=./docker-host.pem"
+        
+        docker context use swarm-${{ inputs.environment }}
+
+    - name: Verify swarm connectivity
+      shell: bash
+      run: |
+        docker node ls
+        docker service ls
+
+    - name: Create secrets if not exist
+      shell: bash
+      run: |
+        # Check and create secrets
+        if ! docker secret inspect db_name >/dev/null 2>&1; then
+          echo "powernode_${{ inputs.environment }}" | docker secret create db_name -
+        fi
+        
+        # Add other secrets as needed (these would typically be created separately)
+        # This is just for demonstration - secrets should be pre-created
+
+    - name: Deploy stack
+      shell: bash
+      env:
+        REGISTRY_URL: ${{ inputs.registry-url }}
+        VERSION: ${{ inputs.version }}
+        DOMAIN: ${{ inputs.environment == 'production' && secrets.PRODUCTION_DOMAIN || secrets.STAGING_DOMAIN }}
+        ACME_EMAIL: ${{ secrets.ACME_EMAIL }}
+      run: |
+        # Deploy using Docker Swarm stack
+        docker stack deploy \
+          --compose-file docker/swarm/${{ inputs.environment }}.yml \
+          --with-registry-auth \
+          ${{ inputs.stack-name }}
+
+    - name: Wait for deployment
+      shell: bash
+      run: |
+        echo "Waiting for services to be ready..."
+        timeout 300 bash -c '
+          while [[ "$(docker service ls --filter name=${{ inputs.stack-name }} --format "{{.Replicas}}" | grep -c "/")" != "0" ]]; do
+            echo "Waiting for services to start..."
+            sleep 10
+          done
+        '
+
+    - name: Verify deployment
+      shell: bash
+      run: |
+        # Check service status
+        docker service ls --filter name=${{ inputs.stack-name }}
+        
+        # Run health checks
+        ./scripts/deployment/health-check.sh ${{ inputs.stack-name }}
+
+    - name: Cleanup
+      shell: bash
+      if: always()
+      run: |
+        rm -f docker-host.pem
+        docker context rm swarm-${{ inputs.environment }} || true
