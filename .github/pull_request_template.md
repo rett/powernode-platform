@@ -62,7 +62,7 @@ Please check all that apply:
 
 ### Documentation
 - [ ] I have made corresponding changes to the documentation
-- [ ] I have updated the CHANGELOG.md if necessary
+- [ ] I have updated the docs/CHANGELOG.md if necessary
 - [ ] I have updated any relevant API documentation
 
 ### Security

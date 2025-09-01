@@ -112,7 +112,7 @@ When reporting a vulnerability, please include:
 ### Update Channels
 
 - **Security Advisories**: GitHub Security Advisories
-- **Release Notes**: Detailed in CHANGELOG.md
+- **Release Notes**: Detailed in docs/CHANGELOG.md
 - **Email Notifications**: For critical vulnerabilities
 - **Social Media**: @powernode_dev announcements
 
