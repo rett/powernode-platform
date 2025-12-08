@@ -1,0 +1,299 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Run daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  secret-scan:
+    name: Secret Scanning
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_CONFIG: .gitleaks.toml
+
+  container-scan:
+    name: Container Vulnerability Scan
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - dockerfile: server/Dockerfile
+            image: powernode-server
+          - dockerfile: worker/Dockerfile
+            image: powernode-worker
+          - dockerfile: frontend/Dockerfile
+            image: powernode-frontend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check if Dockerfile exists
+        id: check-dockerfile
+        run: |
+          if [ -f "${{ matrix.dockerfile }}" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build Docker image
+        if: steps.check-dockerfile.outputs.exists == 'true'
+        run: |
+          docker build -t ${{ matrix.image }}:scan -f ${{ matrix.dockerfile }} $(dirname ${{ matrix.dockerfile }})
+
+      - name: Run Trivy vulnerability scanner
+        if: steps.check-dockerfile.outputs.exists == 'true'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '${{ matrix.image }}:scan'
+          format: 'sarif'
+          output: 'trivy-results-${{ matrix.image }}.sarif'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+
+      - name: Upload Trivy scan results
+        if: steps.check-dockerfile.outputs.exists == 'true'
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results-${{ matrix.image }}.sarif'
+
+  dependency-scan:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-fs-results.sarif'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true
+
+      - name: Upload filesystem scan results
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-fs-results.sarif'
+
+  ruby-audit:
+    name: Ruby Dependency Audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: server
+
+      - name: Install bundler-audit
+        run: gem install bundler-audit
+
+      - name: Update vulnerability database
+        run: bundle-audit update
+
+      - name: Run bundle audit
+        run: bundle-audit check --format json > bundler-audit-report.json || true
+
+      - name: Check for critical vulnerabilities
+        run: |
+          if [ -f bundler-audit-report.json ]; then
+            CRITICAL=$(cat bundler-audit-report.json | jq '[.results[] | select(.criticality == "high" or .criticality == "critical")] | length')
+            if [ "$CRITICAL" -gt 0 ]; then
+              echo "::error::Found $CRITICAL critical/high Ruby vulnerabilities"
+              cat bundler-audit-report.json
+              exit 1
+            fi
+          fi
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundler-audit-report
+          path: server/bundler-audit-report.json
+          retention-days: 30
+
+  npm-audit:
+    name: NPM Dependency Audit
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run npm audit
+        run: npm audit --json > npm-audit-report.json || true
+
+      - name: Check for critical vulnerabilities
+        run: |
+          if [ -f npm-audit-report.json ]; then
+            CRITICAL=$(cat npm-audit-report.json | jq '.metadata.vulnerabilities.critical // 0')
+            HIGH=$(cat npm-audit-report.json | jq '.metadata.vulnerabilities.high // 0')
+            if [ "$CRITICAL" -gt 0 ] || [ "$HIGH" -gt 0 ]; then
+              echo "::error::Found $HIGH high and $CRITICAL critical npm vulnerabilities"
+              npm audit --audit-level=high
+              exit 1
+            fi
+          fi
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-report
+          path: frontend/npm-audit-report.json
+          retention-days: 30
+
+  brakeman:
+    name: Rails Security Scan (Brakeman)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+          working-directory: server
+
+      - name: Install Brakeman
+        run: gem install brakeman
+
+      - name: Run Brakeman
+        run: |
+          brakeman -q --format json -o brakeman-report.json || true
+          brakeman -q --format sarif -o brakeman-report.sarif || true
+
+      - name: Upload SARIF report
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: server/brakeman-report.sarif
+
+      - name: Check for high-confidence warnings
+        run: |
+          HIGH_WARNINGS=$(cat brakeman-report.json | jq '[.warnings[] | select(.confidence == "High")] | length')
+          if [ "$HIGH_WARNINGS" -gt 0 ]; then
+            echo "::error::Found $HIGH_WARNINGS high-confidence security warnings"
+            cat brakeman-report.json | jq '.warnings[] | select(.confidence == "High")'
+            exit 1
+          fi
+
+      - name: Upload Brakeman report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: brakeman-report
+          path: server/brakeman-report.json
+          retention-days: 30
+
+  security-summary:
+    name: Security Summary
+    needs: [secret-scan, container-scan, dependency-scan, ruby-audit, npm-audit, brakeman]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check results
+        run: |
+          echo "## Security Scan Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Check each job status
+          FAILED=0
+
+          if [ "${{ needs.secret-scan.result }}" != "success" ]; then
+            echo "❌ Secret Scan: ${{ needs.secret-scan.result }}" >> $GITHUB_STEP_SUMMARY
+            FAILED=1
+          else
+            echo "✅ Secret Scan: Passed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.container-scan.result }}" != "success" ]; then
+            echo "❌ Container Scan: ${{ needs.container-scan.result }}" >> $GITHUB_STEP_SUMMARY
+            FAILED=1
+          else
+            echo "✅ Container Scan: Passed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.dependency-scan.result }}" != "success" ]; then
+            echo "❌ Dependency Scan: ${{ needs.dependency-scan.result }}" >> $GITHUB_STEP_SUMMARY
+            FAILED=1
+          else
+            echo "✅ Dependency Scan: Passed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.ruby-audit.result }}" != "success" ]; then
+            echo "❌ Ruby Audit: ${{ needs.ruby-audit.result }}" >> $GITHUB_STEP_SUMMARY
+            FAILED=1
+          else
+            echo "✅ Ruby Audit: Passed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.npm-audit.result }}" != "success" ]; then
+            echo "❌ NPM Audit: ${{ needs.npm-audit.result }}" >> $GITHUB_STEP_SUMMARY
+            FAILED=1
+          else
+            echo "✅ NPM Audit: Passed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          if [ "${{ needs.brakeman.result }}" != "success" ]; then
+            echo "❌ Brakeman: ${{ needs.brakeman.result }}" >> $GITHUB_STEP_SUMMARY
+            FAILED=1
+          else
+            echo "✅ Brakeman: Passed" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ "$FAILED" -eq 1 ]; then
+            echo "⚠️ Some security scans failed. Please review the results." >> $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            echo "🎉 All security scans passed!" >> $GITHUB_STEP_SUMMARY
+          fi
