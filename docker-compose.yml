@@ -1,95 +1,102 @@
+# Docker Compose for local development
+# Usage: docker-compose up -d
+
 services:
+  # PostgreSQL Database
   postgres:
-    image: postgres:15
-    container_name: powernode_postgres
+    image: postgres:16-alpine
+    container_name: powernode-postgres
     environment:
+      POSTGRES_USER: powernode
+      POSTGRES_PASSWORD: powernode_dev
       POSTGRES_DB: powernode_development
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    networks:
-      - powernode_network
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U powernode"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
+  # Redis for Sidekiq and caching
   redis:
     image: redis:7-alpine
-    container_name: powernode_redis
-    ports:
-      - "6379:6379"
+    container_name: powernode-redis
+    command: redis-server --appendonly yes
     volumes:
       - redis_data:/data
-    networks:
-      - powernode_network
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
+  # Rails API Backend
   backend:
     build:
       context: ./server
-      dockerfile: Dockerfile
-    container_name: powernode_backend
+      dockerfile: Dockerfile.dev
+    container_name: powernode-backend
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/powernode_development
-      REDIS_URL: redis://redis:6379/0
       RAILS_ENV: development
-      PORT: 3000
+      DATABASE_URL: postgres://powernode:powernode_dev@postgres:5432/powernode_development
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY_BASE: dev_secret_key_base_for_local_development_only
+      JWT_SECRET: dev_jwt_secret_for_local_development_only
+      WORKER_API_KEY: dev_worker_api_key
+    volumes:
+      - ./server:/app
+      - backend_gems:/usr/local/bundle
     ports:
       - "3000:3000"
     depends_on:
-      - postgres
-      - redis
-    volumes:
-      - ./server:/app
-      - backend_bundle:/usr/local/bundle
-    networks:
-      - powernode_network
-    command: ["bundle", "exec", "rails", "server", "-b", "0.0.0.0", "-p", "3000"]
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    stdin_open: true
+    tty: true
 
+  # Sidekiq Worker
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile.dev
+    container_name: powernode-worker
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      BACKEND_API_URL: http://backend:3000
+      WORKER_API_KEY: dev_worker_api_key
+    volumes:
+      - ./worker:/app
+      - worker_gems:/usr/local/bundle
+    depends_on:
+      - backend
+      - redis
+
+  # React Frontend
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
-    container_name: powernode_frontend
+      dockerfile: Dockerfile.dev
+    container_name: powernode-frontend
     environment:
-      REACT_APP_API_BASE_URL: http://localhost:3000
-      PORT: 3001
+      VITE_API_URL: http://localhost:3000
+      VITE_WS_URL: ws://localhost:3000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     ports:
       - "3001:3001"
     depends_on:
       - backend
-    volumes:
-      - ./frontend:/app
-      - frontend_modules:/app/node_modules
-    networks:
-      - powernode_network
-    command: ["npm", "start"]
-
-  sidekiq:
-    build:
-      context: ./server
-      dockerfile: Dockerfile
-    container_name: powernode_sidekiq
-    environment:
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/powernode_development
-      REDIS_URL: redis://redis:6379/0
-      RAILS_ENV: development
-    depends_on:
-      - postgres
-      - redis
-      - backend
-    volumes:
-      - ./server:/app
-      - backend_bundle:/usr/local/bundle
-    networks:
-      - powernode_network
-    command: ["bundle", "exec", "sidekiq"]
 
 volumes:
   postgres_data:
   redis_data:
-  backend_bundle:
-  frontend_modules:
-
-networks:
-  powernode_network:
-    driver: bridge
+  backend_gems:
+  worker_gems:
