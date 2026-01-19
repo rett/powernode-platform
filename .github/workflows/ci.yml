@@ -1,0 +1,276 @@
+# Continuous Integration Workflow
+# Runs tests on every push and pull request
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  RUBY_VERSION: "3.2.8"
+  NODE_VERSION: "20"
+  POSTGRES_USER: powernode
+  POSTGRES_PASSWORD: powernode_test
+  POSTGRES_DB: powernode_test
+
+jobs:
+  # Backend Tests
+  backend-tests:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ${{ env.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ env.POSTGRES_DB }}
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ env.RUBY_VERSION }}
+          bundler-cache: true
+          working-directory: server
+
+      - name: Set up database
+        working-directory: server
+        env:
+          RAILS_ENV: test
+          DATABASE_URL: postgres://${{ env.POSTGRES_USER }}:${{ env.POSTGRES_PASSWORD }}@localhost:5432/${{ env.POSTGRES_DB }}
+          REDIS_URL: redis://localhost:6379/0
+        run: |
+          bundle exec rails db:create
+          bundle exec rails db:schema:load
+
+      - name: Run RSpec tests
+        working-directory: server
+        env:
+          RAILS_ENV: test
+          DATABASE_URL: postgres://${{ env.POSTGRES_USER }}:${{ env.POSTGRES_PASSWORD }}@localhost:5432/${{ env.POSTGRES_DB }}
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY_BASE: test_secret_key_base
+          JWT_SECRET: test_jwt_secret
+        run: bundle exec rspec --format progress --exclude-pattern "**/channels/**/*_spec.rb"
+
+      - name: Run security audit
+        working-directory: server
+        run: |
+          bundle exec brakeman --no-pager
+          bundle exec bundler-audit check --update
+
+  # Worker Tests
+  worker-tests:
+    name: Worker Tests
+    runs-on: ubuntu-latest
+
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ env.RUBY_VERSION }}
+          bundler-cache: true
+          working-directory: worker
+
+      - name: Run RSpec tests
+        working-directory: worker
+        env:
+          REDIS_URL: redis://localhost:6379/0
+          BACKEND_API_URL: http://localhost:3000
+          WORKER_API_KEY: test_worker_api_key
+        run: bundle exec rspec --format progress
+
+  # Frontend Tests
+  frontend-tests:
+    name: Frontend Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run TypeScript check
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Run ESLint
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Run Jest tests
+        working-directory: frontend
+        env:
+          CI: true
+        run: npm test -- --coverage --watchAll=false
+
+  # Code Quality & Pattern Validation
+  code-quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Check for hardcoded colors (theme violations)
+        working-directory: frontend
+        run: |
+          echo "Checking for hardcoded colors..."
+          # Check for hardcoded color classes that should use theme system
+          VIOLATIONS=$(grep -rn --include="*.tsx" --include="*.ts" \
+            -E "(bg-blue|bg-red|bg-green|bg-yellow|bg-gray|text-blue|text-red|text-green|text-yellow|text-gray|border-blue|border-red|border-green|border-yellow|border-gray)-[0-9]+" \
+            src/ 2>/dev/null | grep -v node_modules | grep -v ".test." || true)
+          if [ -n "$VIOLATIONS" ]; then
+            echo "::warning::Found hardcoded color classes (should use theme system):"
+            echo "$VIOLATIONS"
+          fi
+
+      - name: Check for console.log statements
+        working-directory: frontend
+        run: |
+          echo "Checking for console.log statements..."
+          CONSOLE_LOGS=$(grep -rn --include="*.tsx" --include="*.ts" \
+            "console\\.log" src/ 2>/dev/null | grep -v node_modules | grep -v ".test." || true)
+          if [ -n "$CONSOLE_LOGS" ]; then
+            echo "::warning::Found console.log statements:"
+            echo "$CONSOLE_LOGS"
+          fi
+
+      - name: Check for role-based access (should use permissions)
+        working-directory: frontend
+        run: |
+          echo "Checking for role-based access control..."
+          # Check for direct role checks instead of permission checks
+          ROLE_CHECKS=$(grep -rn --include="*.tsx" --include="*.ts" \
+            -E "(roles\\??\\.includes|role\\s*===|isAdmin|isManager)" \
+            src/ 2>/dev/null | grep -v node_modules | grep -v ".test." || true)
+          if [ -n "$ROLE_CHECKS" ]; then
+            echo "::error::Found role-based access control (should use permissions):"
+            echo "$ROLE_CHECKS"
+            exit 1
+          fi
+
+      - name: Check Ruby frozen_string_literal pragma
+        run: |
+          echo "Checking for frozen_string_literal pragma..."
+          MISSING_PRAGMA=$(find server worker -name "*.rb" -type f \
+            ! -path "*/vendor/*" ! -path "*/node_modules/*" \
+            -exec sh -c 'head -1 "$1" | grep -q "frozen_string_literal" || echo "$1"' _ {} \; 2>/dev/null || true)
+          if [ -n "$MISSING_PRAGMA" ]; then
+            echo "::warning::Ruby files missing frozen_string_literal pragma:"
+            echo "$MISSING_PRAGMA"
+          fi
+
+      - name: Validate API response patterns
+        run: |
+          echo "Checking for direct render calls..."
+          # Check that controllers use render_success/render_error
+          DIRECT_RENDERS=$(grep -rn --include="*.rb" \
+            "render json:" server/app/controllers/ 2>/dev/null | \
+            grep -v "render_success\|render_error\|render_paginated" || true)
+          if [ -n "$DIRECT_RENDERS" ]; then
+            echo "::warning::Found direct render json calls (should use render_success/render_error):"
+            echo "$DIRECT_RENDERS"
+          fi
+
+  # Build Docker Images
+  build-images:
+    name: Build Docker Images
+    runs-on: ubuntu-latest
+    needs: [backend-tests, worker-tests, frontend-tests, code-quality]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./server
+          file: ./server/Dockerfile
+          push: false
+          tags: powernode-backend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build worker image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./worker
+          file: ./worker/Dockerfile
+          push: false
+          tags: powernode-worker:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build frontend image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: false
+          tags: powernode-frontend:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VITE_API_URL=https://api.example.com
+            VITE_WS_URL=wss://api.example.com

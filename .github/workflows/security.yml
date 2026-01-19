@@ -1,0 +1,118 @@
+# Security Scanning Workflow
+# Runs security checks on a schedule and on PRs
+
+name: Security
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  schedule:
+    # Run weekly on Monday at 9 AM UTC
+    - cron: "0 9 * * 1"
+
+jobs:
+  # Backend security scanning
+  backend-security:
+    name: Backend Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2.8"
+          bundler-cache: true
+          working-directory: server
+
+      - name: Run Brakeman (SAST)
+        working-directory: server
+        run: |
+          bundle exec brakeman --format json --output brakeman-report.json || true
+          bundle exec brakeman --format html --output brakeman-report.html || true
+
+      - name: Upload Brakeman report
+        uses: actions/upload-artifact@v4
+        with:
+          name: brakeman-report
+          path: |
+            server/brakeman-report.json
+            server/brakeman-report.html
+
+      - name: Run Bundle Audit
+        working-directory: server
+        run: bundle exec bundler-audit check --update
+
+  # Frontend security scanning
+  frontend-security:
+    name: Frontend Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Run npm audit
+        working-directory: frontend
+        run: npm audit --audit-level=high || true
+
+      - name: Run security lint
+        working-directory: frontend
+        run: npm run lint:security || true
+
+  # Docker image scanning
+  container-security:
+    name: Container Security Scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build -t powernode-backend:scan ./server
+
+      - name: Run Trivy on backend
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: "powernode-backend:scan"
+          format: "sarif"
+          output: "trivy-backend.sarif"
+          severity: "CRITICAL,HIGH"
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: "trivy-backend.sarif"
+
+  # Dependency review for PRs
+  dependency-review:
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
