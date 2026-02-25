@@ -228,7 +228,7 @@ Subscription management platform built with Rails 8 API backend and React TypeSc
 - [ ] Set up production hosting environment
 - [ ] Configure PostgreSQL production database
 - [ ] Implement Redis for background jobs and caching
-- [✅] SSL/HTTPS handled by Traefik reverse proxy (docker-compose.prod.yml)
+- [✅] SSL/HTTPS handled by Traefik reverse proxy (docker/docker-compose.prod.yml)
 - [ ] Configure CDN for static assets
 
 ### CI/CD Pipeline
@@ -391,8 +391,8 @@ Subscription management platform built with Rails 8 API backend and React TypeSc
   - ✅ Multi-stage Dockerfile for Rails backend (production-optimized)
   - ✅ Multi-stage Dockerfile for Sidekiq worker (with ffmpeg, imagemagick)
   - ✅ Multi-stage Dockerfile for React frontend (Vite + nginx)
-  - ✅ docker-compose.yml for local development
-  - ✅ docker-compose.prod.yml for production with Traefik reverse proxy
+  - ✅ docker/docker-compose.yml for local development
+  - ✅ docker/docker-compose.prod.yml for production with Traefik reverse proxy
   - ✅ .dockerignore files for all services
   - ✅ .env.example with all production configuration options
 
