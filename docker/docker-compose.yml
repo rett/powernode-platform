@@ -1,5 +1,5 @@
 # Docker Compose for local development
-# Usage: docker-compose up -d
+# Usage: docker compose -f docker/docker-compose.yml up -d
 
 services:
   # PostgreSQL Database
@@ -38,7 +38,7 @@ services:
   # Rails API Backend
   backend:
     build:
-      context: ./server
+      context: ../server
       dockerfile: Dockerfile.dev
     container_name: powernode-backend
     environment:
@@ -49,7 +49,7 @@ services:
       JWT_SECRET: dev_jwt_secret_for_local_development_only
       WORKER_API_KEY: dev_worker_api_key
     volumes:
-      - ./server:/app
+      - ../server:/app
       - backend_gems:/usr/local/bundle
     ports:
       - "3000:3000"
@@ -64,7 +64,7 @@ services:
   # Sidekiq Worker
   worker:
     build:
-      context: ./worker
+      context: ../worker
       dockerfile: Dockerfile.dev
     container_name: powernode-worker
     environment:
@@ -72,7 +72,7 @@ services:
       BACKEND_API_URL: http://backend:3000
       WORKER_API_KEY: dev_worker_api_key
     volumes:
-      - ./worker:/app
+      - ../worker:/app
       - worker_gems:/usr/local/bundle
     depends_on:
       - backend
@@ -81,14 +81,14 @@ services:
   # React Frontend
   frontend:
     build:
-      context: ./frontend
+      context: ../frontend
       dockerfile: Dockerfile.dev
     container_name: powernode-frontend
     environment:
       VITE_API_URL: http://localhost:3000
       VITE_WS_URL: ws://localhost:3000
     volumes:
-      - ./frontend:/app
+      - ../frontend:/app
       - /app/node_modules
     ports:
       - "3001:3001"

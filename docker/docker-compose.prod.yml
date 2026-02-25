@@ -1,5 +1,5 @@
 # Docker Compose for production deployment
-# Usage: docker-compose -f docker-compose.prod.yml up -d
+# Usage: docker compose -f docker/docker-compose.prod.yml up -d
 
 services:
   # PostgreSQL Database
@@ -40,7 +40,7 @@ services:
   # Rails API Backend
   backend:
     build:
-      context: ./server
+      context: ../server
       dockerfile: Dockerfile
       target: production
     container_name: powernode-backend
@@ -75,7 +75,7 @@ services:
   # Sidekiq Worker
   worker:
     build:
-      context: ./worker
+      context: ../worker
       dockerfile: Dockerfile
       target: production
     container_name: powernode-worker
@@ -96,7 +96,7 @@ services:
   # React Frontend
   frontend:
     build:
-      context: ./frontend
+      context: ../frontend
       dockerfile: Dockerfile
       args:
         VITE_API_URL: https://api.${DOMAIN}

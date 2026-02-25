@@ -1,5 +1,5 @@
 # Docker Compose override for MCP server containers
-# Usage: docker compose -f docker-compose.yml -f docker-compose.mcp.yml up
+# Usage: docker compose -f docker/docker-compose.yml -f docker/docker-compose.mcp.yml up
 #
 # Each MCP server runs in a sandboxed container with:
 # - Read-only root filesystem
@@ -258,7 +258,7 @@ services:
       - GOOGLE_APPLICATION_CREDENTIALS=/secrets/gcp-credentials.json
       - NODE_ENV=production
     volumes:
-      - ${GCP_CREDENTIALS_PATH:-./secrets/gcp-credentials.json}:/secrets/gcp-credentials.json:ro
+      - ${GCP_CREDENTIALS_PATH:-../secrets/gcp-credentials.json}:/secrets/gcp-credentials.json:ro
     read_only: true
     security_opt:
       - no-new-privileges:true
