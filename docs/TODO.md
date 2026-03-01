@@ -3,7 +3,7 @@
 ## Project Overview
 Subscription management platform built with Rails 8 API backend and React TypeScript frontend, featuring Stripe/PayPal integration, automated billing, and comprehensive analytics.
 
-## Development Status: v0.3.0 — AI Autonomy System Complete
+## Development Status: v0.3.1 — Maintenance & Configuration
 
 ---
 
