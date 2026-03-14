@@ -99,7 +99,7 @@
     "@babel/preset-typescript": "^7.28.5",
     "@cypress/react": "^9.0.1",
     "@cypress/webpack-dev-server": "^4.1.1",
-    "@eslint/js": "^9.39.2",
+    "@eslint/js": "^10.0.1",
     "@tailwindcss/postcss": "^4.1.11",
     "@testing-library/jest-dom": "^6.6.4",
     "@testing-library/user-event": "^14.6.1",
