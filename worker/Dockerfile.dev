@@ -1,5 +1,5 @@
 # Development Dockerfile for Sidekiq worker
-FROM ruby:3.2.8-slim
+FROM ruby:4.0.1-slim
 
 # Install system dependencies + tini for proper PID 1 init
 RUN apt-get update -qq && \
