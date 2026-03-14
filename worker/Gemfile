@@ -58,7 +58,7 @@ gem 'prawn-table', '~> 0.2'         # PDF table support
 gem 'caxlsx', '~> 4.0'              # XLSX generation
 
 # Notification providers
-gem 'twilio-ruby', '~> 6.0'         # Twilio SMS
+gem 'twilio-ruby', '~> 7.10'        # Twilio SMS
 gem 'googleauth', '~> 1.8'          # Firebase auth
 gem 'google-apis-fcm_v1', '~> 0.6'  # Firebase Cloud Messaging
 
