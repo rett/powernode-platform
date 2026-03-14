@@ -1,5 +1,5 @@
 # Multi-stage production Dockerfile for Rails API backend
-FROM ruby:3.2.8-slim AS base
+FROM ruby:4.0.1-slim AS base
 
 # Install system dependencies + tini for proper PID 1 init
 RUN apt-get update -qq && \
