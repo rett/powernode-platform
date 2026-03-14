@@ -479,7 +479,7 @@ Powernode Platform Architecture: Rails 8.1 API backend (server/) with JWT auth, 
 #### Backend (Controller)
 ```ruby
 class Api::V1::MyController < ApplicationController
-  before_action :require_enterprise!, only: [:billing_action]
+  before_action :require_business!, only: [:billing_action]
   
   def billing_action
     return render_error('Feature not available') unless FeatureGateService.feature_enabled?(:my_feature)
@@ -490,7 +490,7 @@ end
 
 #### Backend (Service)
 ```ruby
-return unless Shared::FeatureGateService.enterprise_loaded?
+return unless Shared::FeatureGateService.business_loaded?
 return unless Flipper.enabled?(:my_granu...
 
 - **Quality**: 0.74 | **Usage**: 8 | **Access level**: team
@@ -751,7 +751,7 @@ Use :: separator in class_name: — 'Ai::AgentTeam' not 'AiAgentTeam'. Rails won
 
 ### Path aliases for cross-feature imports
 
-Frontend: @/shared/ for shared utilities, @/features/ for feature code. Enterprise: @enterprise/ for intra-enterprise imports.
+Frontend: @/shared/ for shared utilities, @/features/ for feature code. Business: @business/ for intra-business imports.
 
 - **Quality**: 0.61 | **Usage**: 20 | **Access level**: account
 - **Source**: manual | **Tags**: frontend, imports
@@ -853,7 +853,7 @@ Critical git and code conventions that must be followed:
 Git Rules:
 - Tag naming: NO "v" prefix — use 0.2.0, not v0.2.0. Release branches: release/0.2.0
 - No Claude attribution: Never include "Co-Authored-By" or "Generated with" in commit messages
-- Submodule push order: ALWAYS push enterprise submodule before the parent repo to avoid dangling references
+- Submodule push order: ALWAYS push business submodule before the parent repo to avoid dangling references
 
 Backend Code Hygiene:
 - Every Ruby file must start with: # frozen_string_literal: true
@@ -1103,12 +1103,12 @@ Gitea contents API fails for slashed refs (mission/feature-name). GiteaApiClient
 - **Quality**: 0.58 | **Usage**: 7 | **Access level**: account
 - **Source**: manual | **Tags**: gitea, gotcha, devops
 
-### Enterprise submodule pattern
+### Business submodule pattern
 
-Enterprise features at extensions/enterprise/ (git submodule). When absent, app runs single-user self-hosted, all features unlocked. Gate: Shared::FeatureGateService.enterprise_loaded? (backend), __ENTERPRISE__ (frontend).
+Business features at extensions/business/ (git submodule). When absent, app runs single-user self-hosted, all features unlocked. Gate: Shared::FeatureGateService.business_loaded? (backend), __BUSINESS__ (frontend).
 
 - **Quality**: 0.58 | **Usage**: 8 | **Access level**: account
-- **Source**: manual | **Tags**: architecture, enterprise
+- **Source**: manual | **Tags**: architecture, business
 
 ### UUIDv7 primary keys on all tables
 

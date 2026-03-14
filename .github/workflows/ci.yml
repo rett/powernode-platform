@@ -1,6 +1,6 @@
 # Core CI Workflow
-# Runs tests on the open-core codebase WITHOUT enterprise submodule.
-# Enterprise CI runs separately in the private powernode-enterprise repo.
+# Runs tests on the open-core codebase WITHOUT business submodule.
+# Business CI runs separately in the private powernode-business repo.
 
 name: CI
 

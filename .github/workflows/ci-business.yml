@@ -1,15 +1,15 @@
-# Enterprise CI Workflow
-# Runs full test suite with enterprise submodule checked out.
-# This workflow is triggered from the private powernode-enterprise repo
+# Business CI Workflow
+# Runs full test suite with business submodule checked out.
+# This workflow is triggered from the private powernode-business repo
 # or manually via workflow_dispatch.
 
-name: CI (Enterprise)
+name: CI (Business)
 
 on:
   workflow_dispatch:
     inputs:
-      enterprise_ref:
-        description: 'Enterprise branch/tag to test'
+      business_ref:
+        description: 'Business branch/tag to test'
         required: false
         default: 'develop'
 
@@ -22,7 +22,7 @@ env:
 
 jobs:
   backend-tests:
-    name: Backend Tests (Enterprise)
+    name: Backend Tests (Business)
     runs-on: ubuntu-latest
 
     services:
@@ -51,17 +51,17 @@ jobs:
           --health-retries 5
 
     steps:
-      - name: Checkout code with enterprise submodule
+      - name: Checkout code with business submodule
         uses: actions/checkout@v4
         with:
           submodules: true
           token: ${{ secrets.ENTERPRISE_PAT }}
 
-      - name: Checkout enterprise branch
-        if: github.event.inputs.enterprise_ref
+      - name: Checkout business branch
+        if: github.event.inputs.business_ref
         run: |
-          cd enterprise
-          git checkout ${{ github.event.inputs.enterprise_ref }}
+          cd business
+          git checkout ${{ github.event.inputs.business_ref }}
 
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
@@ -80,7 +80,7 @@ jobs:
           bundle exec rails db:create
           bundle exec rails db:migrate
 
-      - name: Verify enterprise engine loaded
+      - name: Verify business engine loaded
         working-directory: server
         env:
           RAILS_ENV: test
@@ -88,9 +88,9 @@ jobs:
           REDIS_URL: redis://localhost:6379/0
           SECRET_KEY_BASE: test_secret_key_base
         run: |
-          bundle exec rails runner "raise 'Enterprise not loaded' unless defined?(PowernodeEnterprise::Engine)"
+          bundle exec rails runner "raise 'Business not loaded' unless defined?(PowernodeBusiness::Engine)"
 
-      - name: Run RSpec tests (core + enterprise)
+      - name: Run RSpec tests (core + business)
         working-directory: server
         env:
           RAILS_ENV: test
@@ -101,21 +101,21 @@ jobs:
         run: bundle exec rspec --format progress
 
   frontend-tests:
-    name: Frontend Tests (Enterprise)
+    name: Frontend Tests (Business)
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code with enterprise submodule
+      - name: Checkout code with business submodule
         uses: actions/checkout@v4
         with:
           submodules: true
           token: ${{ secrets.ENTERPRISE_PAT }}
 
-      - name: Checkout enterprise branch
-        if: github.event.inputs.enterprise_ref
+      - name: Checkout business branch
+        if: github.event.inputs.business_ref
         run: |
-          cd enterprise
-          git checkout ${{ github.event.inputs.enterprise_ref }}
+          cd business
+          git checkout ${{ github.event.inputs.business_ref }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -128,7 +128,7 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Run TypeScript check (with enterprise)
+      - name: Run TypeScript check (with business)
         working-directory: frontend
         run: npm run typecheck
 
@@ -142,13 +142,13 @@ jobs:
           CI: true
         run: npm test -- --coverage --watchAll=false
 
-  build-enterprise-images:
-    name: Build Enterprise Docker Images
+  build-business-images:
+    name: Build Business Docker Images
     runs-on: ubuntu-latest
     needs: [backend-tests, frontend-tests]
 
     steps:
-      - name: Checkout code with enterprise submodule
+      - name: Checkout code with business submodule
         uses: actions/checkout@v4
         with:
           submodules: true
@@ -157,23 +157,23 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build backend image (enterprise)
+      - name: Build backend image (business)
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./server/Dockerfile
           push: false
-          tags: powernode-backend-enterprise:${{ github.sha }}
+          tags: powernode-backend-business:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Build frontend image (enterprise)
+      - name: Build frontend image (business)
         uses: docker/build-push-action@v5
         with:
           context: .
           file: ./frontend/Dockerfile
           push: false
-          tags: powernode-frontend-enterprise:${{ github.sha }}
+          tags: powernode-frontend-business:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |

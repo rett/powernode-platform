@@ -19,7 +19,7 @@
   *Priority: high*
 
 - [ ] PCI DSS compliance certification
-  Complete PCI DSS compliance certification for payment processing (enterprise).
+  Complete PCI DSS compliance certification for payment processing (business).
   *Priority: high*
 
 - [ ] Final security audit and penetration testing

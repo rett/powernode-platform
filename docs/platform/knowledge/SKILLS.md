@@ -30,7 +30,7 @@
 | Code Generation | productivity | 0 | 0.40 | Yes |
 | Content Localization | marketing | 0 | 0.40 | Yes |
 | Database Design | data | 0 | 0.40 | Yes |
-| Security Audit | enterprise_search | 0 | 0.40 | Yes |
+| Security Audit | business_search | 0 | 0.40 | Yes |
 | Compliance Review | legal | 0 | 0.40 | Yes |
 | Powernode Development | code_intelligence | 0 | 0.40 | Yes |
 | Database Operations | database_ops | 0 | 0.40 | Yes |
@@ -236,7 +236,7 @@ Score and rerank RAG search results by semantic relevance, factual alignment, an
 - **Version**: 1.0.0 | **Usage**: 0 (0.50 success rate)
 - **Effectiveness**: 0.40 | **Tags**: none
 
-## Enterprise Search (1)
+## Business Search (1)
 
 ### Security Audit
 
@@ -293,10 +293,10 @@ Review code changes for quality, adherence to project patterns, security vulnera
 
 ### Powernode Development
 
-Powernode platform development patterns: Rails 8 API backend, React TypeScript frontend, Sidekiq worker, enterprise extensions. Covers coding conventions, architecture rules, and MCP-first workflow.
+Powernode platform development patterns: Rails 8 API backend, React TypeScript frontend, Sidekiq worker, business extensions. Covers coding conventions, architecture rules, and MCP-first workflow.
 
 - **Version**: 1.0.0 | **Usage**: 0 (0.50 success rate)
-- **Effectiveness**: 0.40 | **Tags**: rails, react, typescript, sidekiq, enterprise, mcp, powernode
+- **Effectiveness**: 0.40 | **Tags**: rails, react, typescript, sidekiq, business, mcp, powernode
 
 ### Code Intelligence
 
@@ -307,10 +307,10 @@ Navigate, understand, and analyze codebases. Trace function calls, find symbol u
 
 ### Extension Developer
 
-Develop enterprise extension features with proper feature gating, submodule patterns, and path alias configuration.
+Develop business extension features with proper feature gating, submodule patterns, and path alias configuration.
 
 - **Version**: 1.0.0 | **Usage**: 0 (0.50 success rate)
-- **Effectiveness**: 0.40 | **Tags**: enterprise, feature-gating, submodule
+- **Effectiveness**: 0.40 | **Tags**: business, feature-gating, submodule
 
 ### WebSocket Channel Developer
 
