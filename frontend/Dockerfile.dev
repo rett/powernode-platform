@@ -1,5 +1,5 @@
 # Development Dockerfile for React frontend
-FROM node:20-alpine
+FROM node:25-alpine
 
 # tini is included in node:alpine images as /sbin/tini
 WORKDIR /app
