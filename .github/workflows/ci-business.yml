@@ -52,7 +52,7 @@ jobs:
 
     steps:
       - name: Checkout code with business submodule
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: true
           token: ${{ secrets.ENTERPRISE_PAT }}
@@ -106,7 +106,7 @@ jobs:
 
     steps:
       - name: Checkout code with business submodule
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: true
           token: ${{ secrets.ENTERPRISE_PAT }}
@@ -149,7 +149,7 @@ jobs:
 
     steps:
       - name: Checkout code with business submodule
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: true
           token: ${{ secrets.ENTERPRISE_PAT }}

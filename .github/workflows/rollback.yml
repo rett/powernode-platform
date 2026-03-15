@@ -51,7 +51,7 @@ jobs:
       current_sha: ${{ steps.get-current.outputs.sha }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -102,7 +102,7 @@ jobs:
     
     steps:
       - name: Checkout target version
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ needs.prepare.outputs.target_sha }}
 
