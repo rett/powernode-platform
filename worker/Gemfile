@@ -31,7 +31,7 @@ gem 'amazing_print', '~> 1.5'
 
 # Redis connection
 gem 'redis', '~> 5.0'
-gem 'connection_pool', '~> 2.4'
+gem 'connection_pool', '~> 3.0'
 
 # Web server for Sidekiq web interface
 gem 'rackup', '~> 2.1'
