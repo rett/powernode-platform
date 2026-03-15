@@ -52,7 +52,7 @@ gem 'mini_exiftool', '~> 2.11'     # EXIF data extraction
 gem 'streamio-ffmpeg', '~> 3.0'    # Video/audio processing
 
 # Payment providers (for reconciliation)
-gem 'stripe', '~> 18.0', require: false
+gem 'stripe', '~> 18.4', require: false
 gem 'paypal-sdk-rest', '~> 1.7', require: false
 
 # Document generation
@@ -62,7 +62,7 @@ gem 'caxlsx', '~> 4.0'              # XLSX generation
 
 # Notification providers
 gem 'twilio-ruby', '~> 6.0'         # Twilio SMS
-gem 'googleauth', '~> 1.8'          # Firebase auth
+gem 'googleauth', '~> 1.16'         # Firebase auth
 gem 'google-apis-fcm_v1', '~> 0.6'  # Firebase Cloud Messaging
 
 # WebSocket support for MCP
